@@ -1,122 +1,108 @@
-﻿using Model;
-using View;
+﻿using System.Numerics;
 
+namespace Application;
 
-namespace Application
+internal static class Program
 {
+    private static bool _winner = false;
+    private static Board _board;
+    private static Player _currentPlayer;
 
-    internal static class Program
+    public static void Main()
     {
-        public struct Dimension() { public int? x = null; public int? y = null; };
-        static bool winner = false;
-        static Gobblet[,,] board = new Gobblet[3, 3, 3];
-        public enum MoveType { addGoblet, moveGoblet };
-        public enum Size { small, medium, large };
-        public enum Color { blue, orange };
-        public struct Player() { public Color color; public List<Gobblet> goblets; };
-        public struct Gobblet() { public Size? size; public Color? color; };
+        Player orangePlayer = new Player(Color.orange);
+        Player bluePlayer = new Player(Color.blue);
+        _board = Board.GetBoard();
+        _currentPlayer = orangePlayer;
+        int moveCounter = 0;
 
-
-        public static void Main()
+        while (!_winner)
         {
-            Player orangePlayer = new Player()
+            if (moveCounter == 0)
             {
-                color = Color.orange,
-                goblets = new List<Gobblet> {
-                    new Gobblet { size = Size.small, color = Color.orange },
-                    new Gobblet { size = Size.small, color = Color.orange },
-                    new Gobblet { size = Size.medium, color = Color.orange },
-                    new Gobblet { size = Size.medium, color = Color.orange },
-                    new Gobblet { size = Size.large, color = Color.orange },
-                    new Gobblet { size = Size.large, color = Color.orange }
-                }
-            };
-
-            Player bluePlayer = new Player()
+                View.printWelcomeMessage();
+            }
+            View.drawBoard(_board);
+            View.drawPlayerGobblets(_currentPlayer);
+            if (moveCounter < 2) //in first two steps you cant move goblets on board
             {
-                color = Color.blue,
-                goblets = new List<Gobblet>{
-                    new Gobblet { size = Size.small, color = Color.blue },
-                    new Gobblet { size = Size.small, color = Color.blue },
-                    new Gobblet { size = Size.medium, color = Color.blue },
-                    new Gobblet { size = Size.medium, color = Color.blue },
-                    new Gobblet { size = Size.large, color = Color.blue },
-                    new Gobblet { size = Size.large, color = Color.blue }
-                }
-            };
-
-            Player currentPlayer = orangePlayer;
-            int moveCounter = 0;
-            while (!winner)
+                PutGobletOnBoard();
+            }
+            else
             {
-                if (moveCounter == 0)
+                MoveType moveType;
+                if (Player.CheckPlayerHaveGoblets(_currentPlayer))
                 {
-                    View.View.printWelcomeMessage();
-                }
-                View.View.drawBoard(board);
-                View.View.drawPlayerGobblets(currentPlayer);
-                if (moveCounter < 3) //in first two steps you cant move goblets on board
-                {
-                    Size playerSelectedSize = Model.Model.SelectSizeToPlay(currentPlayer);
-                    Dimension dimesnions = View.View.SelectDimensionToPut();
-                    while (!Model.Model.PlaceGobletOnBoardOk(playerSelectedSize, currentPlayer, board, dimesnions))
+                    moveType = View.SelectMoveType();
+                    if (moveType == MoveType.addGoblet)
                     {
-                        playerSelectedSize = Model.Model.SelectSizeToPlay(currentPlayer);
-                        dimesnions = View.View.SelectDimensionToPut();
+                        PutGobletOnBoard();
+                    }
+                    else if (moveType == MoveType.moveGoblet)
+                    {
+                        MoveGobletOnBoard();
+                        View.drawBoard(_board);
                     }
                 }
                 else
                 {
-                    MoveType moveType;
-                    if (Model.Model.CheckPlayerHaveGoblets(currentPlayer))
-                    {
-                        moveType = View.View.SelectMoveType();
-                        if (moveType == MoveType.addGoblet)
-                        {
-                            Size playerSelectedSize = Model.Model.SelectSizeToPlay(currentPlayer);
-                            Dimension dimesnions = View.View.SelectDimensionToPut();
-                            while (!Model.Model.PlaceGobletOnBoardOk(playerSelectedSize, currentPlayer, board, dimesnions))
-                            {
-                                playerSelectedSize = Model.Model.SelectSizeToPlay(currentPlayer);
-                                dimesnions = View.View.SelectDimensionToPut();
-                            }
-                        }
-                        else if (moveType == MoveType.moveGoblet)
-                        {
-                            Dimension dimensionFrom = View.View.selectDimensionToTake(board, currentPlayer);
-                            Dimension dimensionToPut = View.View.SelectDimensionToMove(board, dimensionFrom);
-                            Model.Model.MoveGoblet(dimensionFrom, dimensionToPut, board);
-                            View.View.drawBoard(board);
-                        }
-                    }
-                    else
-                    {
-                        moveType = MoveType.moveGoblet;
-
-                    }
+                    moveType = MoveType.moveGoblet;
                 }
-                if (Model.Model.CheckWinner(board) != null)
-                {
-                    winner = true;
-                    Console.WriteLine("THE WINNER IS:  " + Model.Model.CheckWinner(board));
-                }
-                if (currentPlayer.color == Color.orange) //switch current player
-                {
-                    currentPlayer = bluePlayer;
-
-                }
-                else { currentPlayer = orangePlayer; }
-
-                moveCounter++;
             }
-        }
+            if (_board.CheckWinnerColor() != null)
+            {
+                _winner = true;
+                Console.WriteLine("THE WINNER IS:  " + _board.CheckWinnerColor());
+            }
+            if (_currentPlayer.color == Color.orange) //switch current player
+            {
+                _currentPlayer = bluePlayer;
+            }
+            else
+            {
+                _currentPlayer = orangePlayer;
+            }
 
+            moveCounter++;
+        }
+    }
+
+    static void PutGobletOnBoard()
+    {
+        Size playerSelectedSize;
+        Dimension dimensionToPut;
+
+        do
+        {
+            //which size want to play
+            playerSelectedSize = View.SelectSizeToPlay(_currentPlayer.GetAvailableSizes());
+
+            //pass to view available dimensions where player can put goblet
+            dimensionToPut = View.SelectDimensionToPut(
+                _board.GetAvailableDimensionsToPut(
+                    new Gobblet(playerSelectedSize, _currentPlayer.color)
+                )
+            );
+        } while (!_board.PlaceGobletOnBoard(playerSelectedSize, _currentPlayer, dimensionToPut));
+    }
+
+    static void MoveGobletOnBoard()
+    {
+        // get avavailable dimensions from which player can take goblet, can only move goblet in his color
+        List<Dimension> dimensionsToTake = _board.GetAvailableDimensionsToTake(_currentPlayer);
+
+        //get user choice from available dimensions
+        Dimension dimensionFrom = View.selectDimensionToTake(dimensionsToTake);
+
+        // get available dimensions where player can put goblet, can only put goblet on smaller one or in empty space
+        List<Dimension> dimensionsToPut = _board.GetAvailableDimensionsToPut(
+            _board.GetTopGobletOnBoard(dimensionFrom.x, dimensionFrom.y)
+        );
+
+        // get user choice from available dimensions
+        Dimension dimensionToPut = View.SelectDimensionToPut(dimensionsToPut);
+
+        //move goblet
+        _board.MoveGoblet(dimensionFrom, dimensionToPut);
     }
 }
-
-
-
-
-
-
-//sb -small blue, mb - medium blue,  bb - big blue 
